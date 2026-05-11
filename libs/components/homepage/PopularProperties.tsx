@@ -9,6 +9,9 @@ import PopularPropertyCard from './PopularPropertyCard';
 import { Property } from '../../types/property/property';
 import Link from 'next/link';
 import { PropertiesInquiry } from '../../types/property/property.input';
+import { useQuery } from '@apollo/client';
+import { GET_PROPERTIES } from '../../../apollo/user/query';
+import { T } from '../../types/common';
 
 interface PopularPropertiesProps {
 	initialInput: PropertiesInquiry;
@@ -19,7 +22,22 @@ const PopularProperties = (props: PopularPropertiesProps) => {
 	const device = useDeviceDetect();
 	const [popularProperties, setPopularProperties] = useState<Property[]>([]);
 
-	/** APOLLO REQUESTS **/
+	/** APOLLO SO‘ROVLAR **/
+    const {
+      loading: getPropertiesLoading,   // Yuklanayotgan holat
+      data: getPropertiesData,         // Olingan ma’lumotlar
+      error: getPropertiesError,       // Xatolik bo‘lsa
+      refetch: getPropertiesRefetch,   // Qayta so‘rov yuborish
+    } = useQuery(GET_PROPERTIES, {
+      fetchPolicy: 'cache-and-network',   // Kesh va tarmoqdan foydalanish siyosati
+      variables: { input: initialInput }, // Boshlang‘ich parametrlar
+      notifyOnNetworkStatusChange: true,  // Tarmoq holati o‘zgarsa xabar berish
+      onCompleted: (data: T) => {
+        setPopularProperties(data?.getProperties?.list); // Mashhur propertylarni o‘rnatish
+      },
+    });
+
+
 	/** HANDLERS **/
 
 	if (!popularProperties) return null;
