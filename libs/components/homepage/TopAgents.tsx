@@ -8,6 +8,9 @@ import { Autoplay, Navigation, Pagination } from 'swiper';
 import TopAgentCard from './TopAgentCard';
 import { Member } from '../../types/member/member';
 import { AgentsInquiry } from '../../types/member/member.input';
+import { useQuery } from '@apollo/client';
+import { GET_AGENTS } from '../../../apollo/user/query';
+import { T } from '../../types/common';
 
 interface TopAgentsProps {
 	initialInput: AgentsInquiry;
@@ -20,6 +23,21 @@ const TopAgents = (props: TopAgentsProps) => {
 	const [topAgents, setTopAgents] = useState<Member[]>([]);
 
 	/** APOLLO REQUESTS **/
+	/** APOLLO SO‘ROVLAR **/
+const {
+  loading: getPropertiesLoading,   // Yuklanish jarayoni
+  data: getPropertiesData,         // Olingan ma’lumotlar
+  error: getPropertiesError,       // Xatolik bo‘lsa
+  refetch: getPropertiesRefetch,   // Qayta so‘rov yuborish
+} = useQuery(GET_AGENTS, {
+  fetchPolicy: 'cache-and-network',   // Kesh va tarmoqdan foydalanish siyosati
+  variables: { input: initialInput }, // Boshlang‘ich parametrlar
+  notifyOnNetworkStatusChange: true,  // Tarmoq holati o‘zgarsa xabar berish
+  onCompleted: (data: T) => {
+    setTopAgents(data?.getAgents?.list); // Eng yaxshi agentlarni o‘rnatish
+  },
+});
+
 	/** HANDLERS **/
 
 	if (device === 'mobile') {
