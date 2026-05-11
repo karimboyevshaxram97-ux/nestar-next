@@ -19,6 +19,19 @@ const TrendProperties = (props: TrendPropertiesProps) => {
 	const [trendProperties, setTrendProperties] = useState<Property[]>([]);
 
 	/** APOLLO REQUESTS **/
+	const {
+      loading: getPropertiesLoading,
+	  data: getPropertiesData,
+	  error: getPropertiesError,
+	  refetch: getPropertiesRefetch,
+	} = useQuery(GET_PROPERTIES, {
+		fetchPolicy: `cache-and-network`,
+		variables: { input: initialInput},
+		notifiyOnNetworkStatusChange: true,
+		onCompated: (data: T) => {
+			setTrendProperties(data?.getProperties?.list);
+		},
+	});
 	/** HANDLERS **/
 
 	if (trendProperties) console.log('trendProperties:', trendProperties);
