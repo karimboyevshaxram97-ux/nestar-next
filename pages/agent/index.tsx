@@ -9,6 +9,13 @@ import AgentCard from '../../libs/components/common/AgentCard';
 import { useRouter } from 'next/router';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { Member } from '../../libs/types/member/member';
+import { useMutation, useQuery } from '@apollo/client';
+import { LIKE_TARGET_MEMBER } from '../../apollo/user/mutation';
+import { T } from '../../libs/types/common';
+import { GET_AGENTS } from '../../apollo/user/query';
+import { Message } from '@mui/icons-material';
+import { Messages } from '../../libs/config';
+import { sweetMixinErrorAlert, sweetTopSmallSuccessAlert } from '../../libs/sweetAlert';
 
 export const getStaticProps = async ({ locale }: any) => ({
 	props: {
@@ -31,7 +38,27 @@ const AgentList: NextPage = ({ initialInput, ...props }: any) => {
 	const [currentPage, setCurrentPage] = useState<number>(1);
 	const [searchText, setSearchText] = useState<string>('');
 
-	/** APOLLO REQUESTS **/
+	/** APOLLO SO‘ROVLAR **/
+    const [likeTargetMember] = useMutation(LIKE_TARGET_MEMBER); 
+    // GraphQL mutatsiyasi: a’zoni "like" qilish uchun
+    
+    const {
+      loading: getAgentsLoading,   // Agentlar yuklanish jarayoni
+      data: getAgentsData,         // Olingan agentlar ma’lumotlari
+      error: getAgentsError,       // Xatolik bo‘lsa
+      refetch: getAgentsRefetch,   // Qayta so‘rov yuborish
+    } = useQuery(GET_AGENTS, {
+      fetchPolicy: 'network-only',       // Faqat tarmoqdan ma’lumot olish
+      variables: { input: searchFilter },// Qidiruv filtri bilan so‘rov
+      notifyOnNetworkStatusChange: true, // Tarmoq holati o‘zgarsa xabar berish
+      onCompleted: (data: T) => {
+        setAgents(data?.getAgents?.list); // Agentlar ro‘yxatini o‘rnatish
+        setTotal(data?.getAgents?.metaCounter[0]?.total); // Umumiy sonini o‘rnatish
+      },
+    });
+
+
+
 	/** LIFECYCLES **/
 	useEffect(() => {
 		if (router.query.input) {
@@ -84,6 +111,29 @@ const AgentList: NextPage = ({ initialInput, ...props }: any) => {
 		});
 		setCurrentPage(value);
 	};
+
+     
+    	/** HANDLERLAR **/
+    const LikeMemberHandler = async (user: any, id: string) => {
+      try {
+        if (!id) return; // Agar id bo‘lmasa, funksiyani to‘xtatish
+        if (!user._id) throw new Error(Messages.error2); // Agar user._id bo‘lmasa, xato chiqarish
+    
+        await likeTargetMember({
+          variables: {
+            input: id, // Mutatsiyaga id yuborish
+          },
+        });
+    
+        await getAgentsRefetch({ input: searchFilter }); // Agentlarni qayta so‘rov qilish
+        await sweetTopSmallSuccessAlert('success', 800); // Muvaffaqiyatli alert ko‘rsatish
+      } catch (err: any) {
+        console.log('XATO, LikePropertyHandler:', err.message); // Konsolda xatoni chiqarish
+        sweetMixinErrorAlert(err.message).then(); // Xato alert ko‘rsatish
+      }
+    };
+
+	
 
 	if (device === 'mobile') {
 		return <h1>AGENTS PAGE MOBILE</h1>;
@@ -181,3 +231,7 @@ AgentList.defaultProps = {
 };
 
 export default withLayoutBasic(AgentList);
+function useMtuation(LIKE_TARGET_MEMBER: any): [any] {
+	throw new Error('Function not implemented.');
+}
+
