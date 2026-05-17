@@ -60,7 +60,7 @@ const AgentCard = (props: AgentCardProps) => {
 						</Link>
 						<span>Agent</span>
 					</Box>
-					<Box component={'div'} className={'buttons'}>
+					<Box component={'div'} className={'buttons'}> 
 						<IconButton color={'default'}>
 							<RemoveRedEyeIcon />
 						</IconButton>

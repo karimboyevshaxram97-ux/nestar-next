@@ -6,18 +6,21 @@ import PropertyBigCard from '../../libs/components/common/PropertyBigCard';
 import ReviewCard from '../../libs/components/agent/ReviewCard';
 import { Box, Button, Pagination, Stack, Typography } from '@mui/material';
 import StarIcon from '@mui/icons-material/Star';
-import { useReactiveVar } from '@apollo/client';
+import { useMutation, useQuery, useReactiveVar } from '@apollo/client';
 import { useRouter } from 'next/router';
 import { Property } from '../../libs/types/property/property';
 import { Member } from '../../libs/types/member/member';
-import { sweetErrorHandling } from '../../libs/sweetAlert';
+import { sweetErrorHandling, sweetMixinErrorAlert, sweetTopSmallSuccessAlert } from '../../libs/sweetAlert';
 import { userVar } from '../../apollo/store';
 import { PropertiesInquiry } from '../../libs/types/property/property.input';
 import { CommentInput, CommentsInquiry } from '../../libs/types/comment/comment.input';
 import { Comment } from '../../libs/types/comment/comment';
 import { CommentGroup } from '../../libs/enums/comment.enum';
-import { REACT_APP_API_URL } from '../../libs/config';
+import { Messages, REACT_APP_API_URL } from '../../libs/config';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { GET_COMMENTS, GET_MEMBER, GET_PROPERTIES } from '../../apollo/user/query';
+import { T } from '../../libs/types/common';
+import { CREATE_COMMENT, LIKE_TARGET_PROPERTY } from '../../apollo/user/mutation';
 
 export const getStaticProps = async ({ locale }: any) => ({
 	props: {
@@ -29,7 +32,7 @@ const AgentDetail: NextPage = ({ initialInput, initialComment, ...props }: any) 
 	const device = useDeviceDetect();
 	const router = useRouter();
 	const user = useReactiveVar(userVar);
-	const [mbId, setMbId] = useState<string | null>(null);
+	const [agentId, setAgentId] = useState<string | null>(null);
 	const [agent, setAgent] = useState<Member | null>(null);
 	const [searchFilter, setSearchFilter] = useState<PropertiesInquiry>(initialInput);
 	const [agentProperties, setAgentProperties] = useState<Property[]>([]);
@@ -44,13 +47,101 @@ const AgentDetail: NextPage = ({ initialInput, initialComment, ...props }: any) 
 	});
 
 	/** APOLLO REQUESTS **/
-	/** LIFECYCLES **/
-	useEffect(() => {
-		if (router.query.agentId) setMbId(router.query.agentId as string);
-	}, [router]);
+    const [createComment] = useMutation(CREATE_COMMENT); 
+    // Yangi komment qo'shish uchun mutatsiya
+    
+    const [likeTargetProperty] = useMutation(LIKE_TARGET_PROPERTY); 
+    // Property'ni "like" qilish uchun mutatsiya
+    
+    const {
+      loading: getMemberLoading,   // A'zo ma'lumotlari yuklanish jarayoni
+      data: getMemberData,         // Olingan a'zo ma'lumotlari
+      error: getMemberError,       // Xatolik bo'lsa
+      refetch: getMemberRefetch,   // Qayta so'rov yuborish
+    } = useQuery(GET_MEMBER, {
+      fetchPolicy: 'network-only', // Faqat tarmoqdan ma'lumot olish
+      variables: { input: agentId },  // A'zo ID bilan so'rov
+      skip:!agentId,                 // Agar mBId bo'lmasa, so'rovni o'tkazib yuborish
+      onCompleted: (data: T) => {
+        setAgent(data.getMember); // Agent ma'lumotini o'rnatish
+    
+        setSearchFilter({
+          ...searchFilter,
+          search: {
+            memberId: data?.getMember?._id, // Qidiruv uchun a'zo ID qo'shish
+          },
+        });
+    
+        setCommentInquiry({
+          ...commentInquiry,
+          search: {
+            commentRefId: data?.getMember?._id, // Komment qidiruvi uchun a'zo ID qo'shish
+          },
+        });
+    
+        setInsertCommentData({
+          ...insertCommentData,
+          commentRefId: data?.getMember?._id, // Yangi komment qo'shishda a'zo ID qo'shish
+        });
+      },
+    });
 
-	useEffect(() => {}, [searchFilter]);
-	useEffect(() => {}, [commentInquiry]);
+    	/** APOLLO SO'ROVLAR **/
+    const {
+      loading: getPropertiesLoading,
+      data: getPropertiesData,
+      error: getPropertiesError,
+      refetch: getPropertiesRefetch,
+    } = useQuery(GET_PROPERTIES, {
+      fetchPolicy: "network-only",
+      variables: { input: searchFilter },
+      skip: !searchFilter.search.memberId,
+      notifyOnNetworkStatusChange: true,
+      onCompleted: (data: T) => {
+        setAgentProperties(data?.getProperties?.list);
+        setPropertyTotal(data?.getProperties?.metaCounter[0]?.total ?? 0);
+      },
+    });
+
+    const {
+      loading: getCommentsLoading,   // Kommentlar yuklanish jarayoni
+      data: getCommentsData,         // Olingan kommentlar ma'lumotlari
+      error: getCommentsError,       // Xatolik bo'lsa
+      refetch: getCommentsRefetch,   // Qayta so'rov yuborish
+    } = useQuery(GET_COMMENTS, {
+      fetchPolicy: 'network-only',   // Faqat tarmoqdan ma'lumot olish
+      variables: { input: commentInquiry }, // Komment qidiruv parametrlari
+      skip: !commentInquiry.search.commentRefId, // Agar commentRefId bo'lmasa, so'rovni o'tkazib yuborish
+      notifyOnNetworkStatusChange: true, // Tarmoq holati o'zgarsa xabar berish
+      onCompleted: (data: T) => {
+        setAgentComments(data?.getComments?.list); // Kommentlar ro'yxatini o'rnatish
+        setCommentTotal(data?.getComments?.metaCounter[0]?.total ?? 0); // Umumiy sonini o'rnatish
+      },
+    });
+    
+
+    
+    	/** LIFECYCLE HOOKLAR **/
+    useEffect(() => {
+      if (router.query.agentId) 
+        setAgentId(router.query.agentId as string); 
+      // Router query'da agentId bo'lsa, uni mbId sifatida o'rnatish
+    }, [router]);
+    
+    useEffect(() => {
+      if (searchFilter.search.memberId) {
+        getPropertiesRefetch({ variables: { input: searchFilter } }).then();
+        // Agar memberId mavjud bo'lsa, property'larni qayta so'rov qilish
+      }
+    }, [searchFilter]);
+    
+    useEffect(() => {
+      if (commentInquiry.search.commentRefId) {
+        getCommentsRefetch({ variables: { input: commentInquiry } }).then();
+        // Agar commentRefId mavjud bo'lsa, kommentlarni qayta so'rov qilish
+      }
+    }, [commentInquiry]);
+    
 
 	/** HANDLERS **/
 	const redirectToMemberPageHandler = async (memberId: string) => {
@@ -59,6 +150,18 @@ const AgentDetail: NextPage = ({ initialInput, initialComment, ...props }: any) 
 			else await router.push(`/member?memberId=${memberId}`);
 		} catch (error) {
 			await sweetErrorHandling(error);
+		}
+	};
+
+	const likePropertyHandler = async (user: T, id: string) => {
+		try {
+			if (!id) return;
+			if (!user._id) throw new Error(Messages.error2);
+			await likeTargetProperty({ variables: { input: id } });
+			await getPropertiesRefetch({ variables: { input: searchFilter } });
+			await sweetTopSmallSuccessAlert('success', 800);
+		} catch (err: any) {
+			sweetMixinErrorAlert(err.message).then();
 		}
 	};
 
@@ -72,13 +175,23 @@ const AgentDetail: NextPage = ({ initialInput, initialComment, ...props }: any) 
 		setCommentInquiry({ ...commentInquiry });
 	};
 
-	const createCommentHandler = async () => {
-		try {
-		} catch (err: any) {
-			sweetErrorHandling(err).then();
-		}
-	};
-
+    	const createCommentHandler = async () => {
+      try {
+        if (!user._id) throw new Error(Messages.error2);                  // ❗ Foydalanuvchi ID bo'lmasa, xato
+        if (user._id === agentId) throw new Error('Cannot write a review for yourself!'); // ❗ O'zingizga review yozish taqiqlangan
+    
+        await createComment({
+          variables: {
+            input: insertCommentData,                                    // 📝 Komment ma'lumotlarini yuborish
+          },
+        });
+        setInsertCommentData({ ...insertCommentData, commentContent: '' }); // 🧹 Komment yozilgandan keyin inputni tozalash
+        await getCommentsRefetch({ input: commentInquiry });                // 🔄 Kommentlarni qayta so'rov qilish
+      } catch (err: any) {
+        sweetErrorHandling(err).then();                                   // ⚠️ Xatoni alert orqali ko'rsatish
+      }
+    };
+    
 	if (device === 'mobile') {
 		return <div>AGENT DETAIL PAGE MOBILE</div>;
 	} else {
@@ -103,7 +216,10 @@ const AgentDetail: NextPage = ({ initialInput, initialComment, ...props }: any) 
 							{agentProperties.map((property: Property) => {
 								return (
 									<div className={'wrap-main'} key={property?._id}>
-										<PropertyBigCard property={property} key={property?._id} />
+										<PropertyBigCard
+										property={property}
+										likePropertyHandler={likePropertyHandler}
+										key={property?._id} />
 									</div>
 								);
 							})}
@@ -219,3 +335,4 @@ AgentDetail.defaultProps = {
 };
 
 export default withLayoutBasic(AgentDetail);
+

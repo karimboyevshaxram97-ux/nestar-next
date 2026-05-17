@@ -11,6 +11,11 @@ import { T } from '../../libs/types/common';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { BoardArticlesInquiry } from '../../libs/types/board-article/board-article.input';
 import { BoardArticleCategory } from '../../libs/enums/board-article.enum';
+import { useMutation, useQuery } from '@apollo/client';
+import { LIKE_TARGET_BOARD_ARTICLE } from '../../apollo/user/mutation';
+import { GET_BOARD_ARTICLES } from '../../apollo/user/query';
+import { Messages } from '../../libs/config';
+import { sweetMixinErrorAlert, sweetTopSmallSuccessAlert } from '../../libs/sweetAlert';
 
 export const getStaticProps = async ({ locale }: any) => ({
 	props: {
@@ -27,8 +32,27 @@ const Community: NextPage = ({ initialInput, ...props }: T) => {
 	const [boardArticles, setBoardArticles] = useState<BoardArticle[]>([]);
 	const [totalCount, setTotalCount] = useState<number>(0);
 	if (articleCategory) initialInput.search.articleCategory = articleCategory;
+    
+    	/** APOLLO SO'ROVLAR **/
+    const [likeTargetBoardArticle] = useMutation(LIKE_TARGET_BOARD_ARTICLE); // 🖱️ Board maqolani "like" qilish mutatsiyasi
+    
+    const {
+      loading: boardArticlesLoading,   // ⏳ Maqolalar yuklanish jarayoni
+      data: boardArticlesData,         // 📦 Olingan maqolalar ma'lumotlari
+      error: getBoardArticlesError,    // ⚠️ Xatolik bo'lsa
+      refetch: boardArticlesRefetch,   // 🔄 Qayta so'rov yuborish
+    } = useQuery(GET_BOARD_ARTICLES, {
+      fetchPolicy: 'network-only',     // 🌐 Faqat tarmoqdan ma'lumot olish
+      variables: {
+        input: searchCommunity,        // 🔍 Community qidiruv parametrlari
+      },
+      notifyOnNetworkStatusChange: true, // 🔔 Tarmoq holati o'zgarsa xabar berish
+      onCompleted: (data: T) => {
+        setBoardArticles(data?.getBoardArticles?.list); // 📋 Maqolalar ro'yxatini o'rnatish
+        setTotalCount(data?.getBoardArticles?.metaCounter[0]?.total); // 🔢 Umumiy sonini o'rnatish
+      },
+    });
 
-	/** APOLLO REQUESTS **/
 
 	/** LIFECYCLES **/
 	useEffect(() => {
@@ -61,7 +85,27 @@ const Community: NextPage = ({ initialInput, ...props }: T) => {
 	const paginationHandler = (e: T, value: number) => {
 		setSearchCommunity({ ...searchCommunity, page: value });
 	};
-
+    
+        const likeArticleHandler = async (e: any, user: any, id: string) => {
+      try {
+        e.stopPropagation();                                           // 🛑 Event propagation'ni to'xtatish
+        if (!id) return;                                               // ❗ Agar id bo'lmasa, funksiyani to'xtatish
+        if (!user._id) throw new Error(Messages.error2);               // ❗ Agar user._id bo'lmasa, xato chiqarish
+    
+        await likeTargetBoardArticle({
+          variables: {
+            input: id,                                                 // 🖱️ Like bosilgan article ID yuborish
+          },
+        });
+        await boardArticlesRefetch({ input: searchCommunity });        // 🔄 Board maqolalarni qayta so'rov qilish
+        await sweetTopSmallSuccessAlert('success', 800);               // ✅ Muvaffaqiyatli alert ko'rsatish
+      } catch (err: any) {
+        console.log('XATO, likePropertyHandler:', err.message);        // 🖥️ Konsolda xatoni chiqarish
+        sweetMixinErrorAlert(err.message).then();                      // ⚠️ Xato alert ko'rsatish
+      }
+    };
+    
+ 	
 	if (device === 'mobile') {
 		return <h1>COMMUNITY PAGE MOBILE</h1>;
 	} else {
@@ -135,9 +179,13 @@ const Community: NextPage = ({ initialInput, ...props }: T) => {
 									<TabPanel value="FREE">
 										<Stack className="list-box">
 											{totalCount ? (
-												boardArticles?.map((boardArticle: BoardArticle) => {
-													return <CommunityCard boardArticle={boardArticle} key={boardArticle?._id} />;
-												})
+												boardArticles?.map((boardArticle: BoardArticle) => (
+													<CommunityCard
+														boardArticle={boardArticle}
+														key={boardArticle?._id}
+														likeArticleHandler={likeArticleHandler}
+													/>
+												))
 											) : (
 												<Stack className={'no-data'}>
 													<img src="/img/icons/icoAlert.svg" alt="" />
@@ -149,9 +197,13 @@ const Community: NextPage = ({ initialInput, ...props }: T) => {
 									<TabPanel value="RECOMMEND">
 										<Stack className="list-box">
 											{totalCount ? (
-												boardArticles?.map((boardArticle: BoardArticle) => {
-													return <CommunityCard boardArticle={boardArticle} key={boardArticle?._id} />;
-												})
+												boardArticles?.map((boardArticle: BoardArticle) => (
+													<CommunityCard
+														boardArticle={boardArticle}
+														key={boardArticle?._id}
+														likeArticleHandler={likeArticleHandler}
+													/>
+												))
 											) : (
 												<Stack className={'no-data'}>
 													<img src="/img/icons/icoAlert.svg" alt="" />
@@ -163,9 +215,13 @@ const Community: NextPage = ({ initialInput, ...props }: T) => {
 									<TabPanel value="NEWS">
 										<Stack className="list-box">
 											{totalCount ? (
-												boardArticles?.map((boardArticle: BoardArticle) => {
-													return <CommunityCard boardArticle={boardArticle} key={boardArticle?._id} />;
-												})
+												boardArticles?.map((boardArticle: BoardArticle) => (
+													<CommunityCard
+														boardArticle={boardArticle}
+														key={boardArticle?._id}
+														likeArticleHandler={likeArticleHandler}
+													/>
+												))
 											) : (
 												<Stack className={'no-data'}>
 													<img src="/img/icons/icoAlert.svg" alt="" />
@@ -177,9 +233,13 @@ const Community: NextPage = ({ initialInput, ...props }: T) => {
 									<TabPanel value="HUMOR">
 										<Stack className="list-box">
 											{totalCount ? (
-												boardArticles?.map((boardArticle: BoardArticle) => {
-													return <CommunityCard boardArticle={boardArticle} key={boardArticle?._id} />;
-												})
+												boardArticles?.map((boardArticle: BoardArticle) => (
+													<CommunityCard
+														boardArticle={boardArticle}
+														key={boardArticle?._id}
+														likeArticleHandler={likeArticleHandler}
+													/>
+												))
 											) : (
 												<Stack className={'no-data'}>
 													<img src="/img/icons/icoAlert.svg" alt="" />

@@ -38,22 +38,22 @@ const AgentList: NextPage = ({ initialInput, ...props }: any) => {
 	const [currentPage, setCurrentPage] = useState<number>(1);
 	const [searchText, setSearchText] = useState<string>('');
 
-	/** APOLLO SO‘ROVLAR **/
+	/** APOLLO SO'ROVLAR **/
     const [likeTargetMember] = useMutation(LIKE_TARGET_MEMBER); 
-    // GraphQL mutatsiyasi: a’zoni "like" qilish uchun
+    // GraphQL mutatsiyasi: a'zoni "like" qilish uchun
     
     const {
       loading: getAgentsLoading,   // Agentlar yuklanish jarayoni
-      data: getAgentsData,         // Olingan agentlar ma’lumotlari
-      error: getAgentsError,       // Xatolik bo‘lsa
-      refetch: getAgentsRefetch,   // Qayta so‘rov yuborish
+      data: getAgentsData,         // Olingan agentlar ma'lumotlari
+      error: getAgentsError,       // Xatolik bo'lsa
+      refetch: getAgentsRefetch,   // Qayta so'rov yuborish
     } = useQuery(GET_AGENTS, {
-      fetchPolicy: 'network-only',       // Faqat tarmoqdan ma’lumot olish
-      variables: { input: searchFilter },// Qidiruv filtri bilan so‘rov
-      notifyOnNetworkStatusChange: true, // Tarmoq holati o‘zgarsa xabar berish
+      fetchPolicy: 'network-only',       // Faqat tarmoqdan ma'lumot olish
+      variables: { input: searchFilter },// Qidiruv filtri bilan so'rov
+      notifyOnNetworkStatusChange: true, // Tarmoq holati o'zgarsa xabar berish
       onCompleted: (data: T) => {
-        setAgents(data?.getAgents?.list); // Agentlar ro‘yxatini o‘rnatish
-        setTotal(data?.getAgents?.metaCounter[0]?.total); // Umumiy sonini o‘rnatish
+        setAgents(data?.getAgents?.list); // Agentlar ro'yxatini o'rnatish
+        setTotal(data?.getAgents?.metaCounter[0]?.total); // Umumiy sonini o'rnatish
       },
     });
 
@@ -116,8 +116,8 @@ const AgentList: NextPage = ({ initialInput, ...props }: any) => {
     	/** HANDLERLAR **/
     const LikeMemberHandler = async (user: any, id: string) => {
       try {
-        if (!id) return; // Agar id bo‘lmasa, funksiyani to‘xtatish
-        if (!user._id) throw new Error(Messages.error2); // Agar user._id bo‘lmasa, xato chiqarish
+        if (!id) return; // Agar id bo'lmasa, funksiyani to'xtatish
+        if (!user._id) throw new Error(Messages.error2); // Agar user._id bo'lmasa, xato chiqarish
     
         await likeTargetMember({
           variables: {
@@ -125,15 +125,15 @@ const AgentList: NextPage = ({ initialInput, ...props }: any) => {
           },
         });
     
-        await getAgentsRefetch({ input: searchFilter }); // Agentlarni qayta so‘rov qilish
-        await sweetTopSmallSuccessAlert('success', 800); // Muvaffaqiyatli alert ko‘rsatish
+        await getAgentsRefetch({ input: searchFilter }); // Agentlarni qayta so'rov qilish
+        await sweetTopSmallSuccessAlert('success', 800); // Muvaffaqiyatli alert ko'rsatish
       } catch (err: any) {
         console.log('XATO, LikePropertyHandler:', err.message); // Konsolda xatoni chiqarish
-        sweetMixinErrorAlert(err.message).then(); // Xato alert ko‘rsatish
+        sweetMixinErrorAlert(err.message).then(); // Xato alert ko'rsatish
       }
     };
 
-	
+
 
 	if (device === 'mobile') {
 		return <h1>AGENTS PAGE MOBILE</h1>;
@@ -189,7 +189,7 @@ const AgentList: NextPage = ({ initialInput, ...props }: any) => {
 							</div>
 						) : (
 							agents.map((agent: Member) => {
-								return <AgentCard agent={agent} key={agent._id} />;
+								return <AgentCard agent={agent} key={agent._id}  likeMemberHandler={LikeMemberHandler}/>;
 							})
 						)}
 					</Stack>
@@ -231,7 +231,4 @@ AgentList.defaultProps = {
 };
 
 export default withLayoutBasic(AgentList);
-function useMtuation(LIKE_TARGET_MEMBER: any): [any] {
-	throw new Error('Function not implemented.');
-}
 
