@@ -5,7 +5,7 @@ import useDeviceDetect from '../../libs/hooks/useDeviceDetect';
 import withLayoutBasic from '../../libs/components/layout/LayoutBasic';
 import { Button, Stack, Typography, Tab, Tabs, IconButton, Backdrop, Pagination } from '@mui/material';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
-import { useReactiveVar } from '@apollo/client';
+import { useMutation, useQuery, useReactiveVar } from '@apollo/client';
 import Moment from 'react-moment';
 import { userVar } from '../../apollo/store';
 import ThumbUpOffAltIcon from '@mui/icons-material/ThumbUpOffAlt';
@@ -13,14 +13,20 @@ import ThumbUpAltIcon from '@mui/icons-material/ThumbUpAlt';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ChatIcon from '@mui/icons-material/Chat';
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
-import { CommentsInquiry } from '../../libs/types/comment/comment.input';
+import { CommentInput, CommentsInquiry } from '../../libs/types/comment/comment.input';
 import { Comment } from '../../libs/types/comment/comment';
 import dynamic from 'next/dynamic';
-import { CommentStatus } from '../../libs/enums/comment.enum';
+import { CommentGroup, CommentStatus } from '../../libs/enums/comment.enum';
 import { T } from '../../libs/types/common';
 import EditIcon from '@mui/icons-material/Edit';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
 import { BoardArticle } from '../../libs/types/board-article/board-article';
+import { GET_COMMENTS } from '../../apollo/user/query';
+import { CREATE_COMMENT, LIKE_TARGET_BOARD_ARTICLE, UPDATE_COMMENT } from '../../apollo/user/mutation';
+import { GET_BOARD_ARTICLE } from '../../apollo/user/query';
+import { Messages, REACT_APP_API_URL } from '../../libs/config';
+import { sweetConfirmAlert, sweetMixinErrorAlert, sweetMixinSuccessAlert, sweetTopSmallSuccessAlert } from '../../libs/sweetAlert';
+import { CommentUpdate } from '../../libs/types/comment/comment.update';
 const ToastViewerComponent = dynamic(() => import('../../libs/components/community/TViewer'), { ssr: false });
 
 export const getStaticProps = async ({ locale }: any) => ({
@@ -56,7 +62,46 @@ const CommunityDetail: NextPage = ({ initialInput, ...props }: T) => {
 	const [likeLoading, setLikeLoading] = useState<boolean>(false);
 	const [boardArticle, setBoardArticle] = useState<BoardArticle>();
 
-	/** APOLLO REQUESTS **/
+    	/** APOLLO SO'ROVLAR **/
+    const [likeTargetBoardArticle] = useMutation(LIKE_TARGET_BOARD_ARTICLE);
+    const [createComment] = useMutation(CREATE_COMMENT);
+    const [updateComment] = useMutation(UPDATE_COMMENT);
+    
+    const {
+      loading: boardArticleLoading,   // ⏳ Maqola yuklanish jarayoni
+      data: boardArticleData,         // 📦 Olingan maqola ma'lumotlari
+      error: getBoardArticleError,    // ⚠️ Xatolik bo'lsa
+      refetch: boardArticleRefetch,   // 🔄 Qayta so'rov yuborish
+    } = useQuery(GET_BOARD_ARTICLE, {
+      fetchPolicy: 'network-only',    // 🌐 Faqat tarmoqdan ma'lumot olish
+      variables: {
+        input: articleId,             // 🔍 Maqola ID bilan so'rov
+      },
+      notifyOnNetworkStatusChange: true, // 🔔 Tarmoq holati o'zgarsa xabar berish
+      onCompleted(data: any) {
+        setBoardArticle(data?.getBoardArticle); // 📋 Maqola ma'lumotini o'rnatish
+        if (data?.getBoardArticle?.memberData?.memberImage) {
+          setMemberImage(`${REACT_APP_API_URL}/${data?.getBoardArticle?.memberData?.memberImage}`);
+        }
+      },
+    });
+    
+    const {
+      loading: getCommentsLoading,   // ⏳ Kommentlar yuklanish jarayoni
+      data: getCommentsData,         // 📦 Olingan kommentlar ma'lumotlari
+      error: getCommentsError,       // ⚠️ Xatolik bo'lsa
+      refetch: getCommentsRefetch,   // 🔄 Qayta so'rov yuborish
+    } = useQuery(GET_COMMENTS, {
+      fetchPolicy: 'network-only',
+      variables: { input: searchFilter },
+      skip: !searchFilter.search.commentRefId,
+      notifyOnNetworkStatusChange: true,
+      onCompleted(data: any) {
+        setComments(data.getComments.list); // 📋 Kommentlar ro'yxatini o'rnatish
+        setTotal(data.getComments?.metaCounter?.[0]?.total || 0); // 🔢 Umumiy sonini o'rnatish
+      },
+    });
+    
 
 	/** LIFECYCLES **/
 	useEffect(() => {
@@ -75,12 +120,93 @@ const CommunityDetail: NextPage = ({ initialInput, ...props }: T) => {
 		);
 	};
 
-	const creteCommentHandler = async () => {};
+    	const likeBoardArticleHandler = async (user: any, id: any) => {
+      try {
+        if (likeLoading) return;                                       // ⏳ Agar likeLoading true bo'lsa, qayta ishlamaslik
+        if (!id) return;                                               // ❗ Agar id bo'lmasa, funksiyani to'xtatish
+        if (!user?._id) throw new Error(Messages.error2);
+        setLikeLoading(true);                                          // 🔄 Like jarayonini boshlash (loading = true)
+    
+        await likeTargetBoardArticle({
+          variables: {
+            input: id,                                                 // 🖱️ Like bosilgan article ID yuborish
+          },
+        });
+        await boardArticleRefetch({ input: articleId });               // 🔄 Maqolani qayta so'rov qilish
+        await sweetTopSmallSuccessAlert('success', 800);               // ✅ Muvaffaqiyatli alert ko'rsatish
+      } catch (err: any) {
+        console.log('XATO_LikeBoArticleHandler', err.message);         // 🖥️ Konsolda xatoni chiqarish
+        sweetMixinErrorAlert(err.message).then();                      // ⚠️ Xato alert ko'rsatish
+      } finally {
+        setLikeLoading(false);                                         // 🔄 Jarayon tugagach loading'ni false qilish
+      }
+    };
+    
+    const creteCommentHandler = async () => {
+      if (!comment) return;                                            // ❗ Agar komment bo'lmasa, funksiyani to'xtatish
+      try {
+        if (!user?._id) throw new Error(Messages.error2);              // ❗ Agar user._id bo'lmasa, xato chiqarish
+    
+        const commentInput: CommentInput = {
+          commentGroup: CommentGroup.ARTICLE,                          // 📝 Komment ARTICLE guruhiga tegishli
+          commentRefId: articleId,                                     // 🔗 Komment qaysi article'ga tegishli
+          commentContent: comment,                                     // 📋 Komment matni
+        };
+    
+        await createComment({
+          variables: {
+            input: commentInput,                                       // 📝 Komment ma'lumotlarini yuborish
+          },
+        });
+        await getCommentsRefetch({ input: searchFilter });             // 🔄 Kommentlarni qayta so'rov qilish
+        await boardArticleRefetch({ input: articleId });               // 🔄 Maqolani qayta so'rov qilish
+        setComment('');                                                // 🧹 Komment inputni tozalash
+        await sweetMixinSuccessAlert('Successfully commented!');       // ✅ Muvaffaqiyatli alert ko'rsatish
+      } catch (error: any) {
+        await sweetMixinErrorAlert(error.message);                     // ⚠️ Xato alert ko'rsatish
+      }
+    };
+    
+    
+    	const updateButtonHandler = async (commentId: string, commentStatus?: CommentStatus.DELETE) => {
+      try {
+      if (!user?._id) throw new Error(Messages.error2);
+      if (!commentId) throw new Error('Select a comment to update!');             // ❗ Komment ID tanlanmagan bo'lsa, xato chiqarish
+      if (!updatedComment && !comments.find(c => c?._id === commentId)?.commentContent) return; 
+                                                                                 // ❗ Agar yangilanish matni ham, eski komment matni ham bo'lmasa, to'xtatish
+    
+      const updateData: CommentUpdate = {
+        _id: commentId,                                                           // 🔗 Komment ID
+        ...(commentStatus && { commentStatus: commentStatus }),                   // 🗑️ Agar status DELETE bo'lsa, o'chirish
+        ...(updatedComment && { commentContent: updatedComment }),                // ✏️ Agar yangi matn bo'lsa, yangilash
+      };
+    
+      if (!updateData?.commentContent && !updateData?.commentStatus)
+        throw new Error('Provide data to update your comment!');                  // ❗ Agar yangilash uchun ma'lumot bo'lmasa, xato chiqarish
+    
+      if (commentStatus) {
+        if (await sweetConfirmAlert('Do you want to delete the comment?')) {      // 🔔 O'chirishni tasdiqlash alerti
+          await updateComment({ variables: { input: updateData } });              // 🗑️ Kommentni o'chirish
+          await sweetMixinSuccessAlert('Successfully deleted!');                  // ✅ O'chirildi alerti
+        } else return;                                                            // ❌ Agar tasdiqlanmasa, to'xtatish
+      } else {
+        await updateComment({ variables: { input: updateData } });                // ✏️ Kommentni yangilash
+        await sweetMixinSuccessAlert('Successfully updated!');                    // ✅ Yangilandi alerti
+      }
+    
+      await getCommentsRefetch({ input: searchFilter });
+    } catch (error: any) {
+      await sweetMixinErrorAlert(error.message);
+    } finally {
+      setOpenBackdrop(false);
+      setUpdatedCommentWordsCnt(0);
+      setUpdatedCommentId('');
+    }
+    };
 
-	const updateButtonHandler = async (commentId: string, commentStatus?: CommentStatus.DELETE) => {};
 
 	const getCommentMemberImage = (imageUrl: string | undefined) => {
-		if (imageUrl) return `${process.env.REACT_APP_API_URL}/${imageUrl}`;
+		if (imageUrl) return `${REACT_APP_API_URL}/${imageUrl}`;
 		else return '/img/community/articleImg.png';
 	};
 
@@ -195,7 +321,14 @@ const CommunityDetail: NextPage = ({ initialInput, ...props }: T) => {
 										</Stack>
 										<Stack className="info">
 											<Stack className="icon-info">
-												{boardArticle?.meLiked ? <ThumbUpAltIcon /> : <ThumbUpOffAltIcon />}
+												{boardArticle?.meLiked && boardArticle?.meLiked[0]?.myFavorite ? ( 
+                                                  <ThumbUpAltIcon 
+                                                    onClick={() => likeBoardArticleHandler(user, boardArticle?._id)} />       // 👍 Agar user oldin like qilgan bo'lsa, to'liq ThumbUpIcon ko'rsatish
+                                                ) : (
+                                                  <ThumbUpOffAltIcon 
+                                                    onClick={() => likeBoardArticleHandler(user, boardArticle?._id)} />       // 👎 Agar user like qilmagan bo'lsa, bo'sh ThumbUpIcon ko'rsatish
+                                                )}
+
 
 												<Typography className="text">{boardArticle?.articleLikes}</Typography>
 											</Stack>
@@ -206,14 +339,14 @@ const CommunityDetail: NextPage = ({ initialInput, ...props }: T) => {
 											</Stack>
 											<Stack className="divider"></Stack>
 											<Stack className="icon-info">
-												{boardArticle?.articleComments && boardArticle?.articleComments > 0 ? (
-													<ChatIcon />
-												) : (
-													<ChatBubbleOutlineRoundedIcon />
-												)}
+                                              {total > 0 ? ( 
+                                                <ChatIcon />                                                     // 💬 Agar total > 0 bo'lsa, to'liq chat ikonka ko'rsatish
+                                              ) : ( 
+                                                <ChatBubbleOutlineRoundedIcon />                                 // 💭 Agar total = 0 bo'lsa, bo'sh chat ikonka ko'rsatish
+                                              )}
+                                              <Typography className="text">{total}</Typography>
+                                            </Stack>
 
-												<Typography className="text">{boardArticle?.articleComments}</Typography>
-											</Stack>
 										</Stack>
 									</Stack>
 									<Stack>
@@ -222,9 +355,16 @@ const CommunityDetail: NextPage = ({ initialInput, ...props }: T) => {
 									<Stack className="like-and-dislike">
 										<Stack className="top">
 											<Button>
-												{boardArticle?.meLiked ? <ThumbUpAltIcon /> : <ThumbUpOffAltIcon />}
-												<Typography className="text">{boardArticle?.articleLikes}</Typography>
-											</Button>
+                                          {boardArticle?.meLiked && boardArticle?.meLiked[0]?.myFavorite ? ( 
+                                            <ThumbUpAltIcon 
+                                              onClick={() => likeBoardArticleHandler(user, boardArticle?._id)} />     // 👍 Agar user oldin like qilgan bo'lsa, to'liq ThumbUpIcon ko'rsatish
+                                          ) : (
+                                            <ThumbUpOffAltIcon 
+                                              onClick={() => likeBoardArticleHandler(user, boardArticle?._id)} />     // 👎 Agar user like qilmagan bo'lsa, bo'sh ThumbUpIcon ko'rsatish
+                                          )}
+                                          <Typography className="text">{boardArticle?.articleLikes}</Typography>
+                                        </Button>
+
 										</Stack>
 									</Stack>
 								</Stack>
@@ -285,7 +425,7 @@ const CommunityDetail: NextPage = ({ initialInput, ...props }: T) => {
 																<DeleteForeverIcon sx={{ color: '#757575', cursor: 'pointer' }} />
 															</IconButton>
 															<IconButton
-																onClick={(e) => {
+																onClick={() => {
 																	setUpdatedComment(commentData?.commentContent);
 																	setUpdatedCommentWordsCnt(commentData?.commentContent?.length);
 																	setUpdatedCommentId(commentData?._id);

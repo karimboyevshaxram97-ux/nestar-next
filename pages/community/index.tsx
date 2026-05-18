@@ -90,7 +90,7 @@ const Community: NextPage = ({ initialInput, ...props }: T) => {
       try {
         e.stopPropagation();                                           // 🛑 Event propagation'ni to'xtatish
         if (!id) return;                                               // ❗ Agar id bo'lmasa, funksiyani to'xtatish
-        if (!user._id) throw new Error(Messages.error2);               // ❗ Agar user._id bo'lmasa, xato chiqarish
+        if (!user?._id) throw new Error(Messages.error2);
     
         await likeTargetBoardArticle({
           variables: {
