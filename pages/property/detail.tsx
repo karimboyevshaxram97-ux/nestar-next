@@ -96,7 +96,7 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
           },
         },
       },
-      skip: !propertyId && !property,
+      skip: !property,
       notifyOnNetworkStatusChange: true,
       onCompleted: (data: T) => {
         if (data?.getProperties?.list)
@@ -147,13 +147,26 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
 	/** HANDLERS **/
 	const likePropertyHandler = async (user: T, id: string) => {
 		try {
-			if (!id || !user?._id) throw new Error(Message.NOT_AUTHENTICATED);
+			if (!id) return;
+			if (!user?._id) throw new Error(Message.NOT_AUTHENTICATED);
+
 			await likeTargetProperty({ variables: { input: id } });
-			await getPropertyRefetch({ input: id });
+			await getPropertyRefetch({ input: propertyId });
+			await getPropertiesRefetch({
+				input: {
+					page: 1,
+					limit: 4,
+					sort: 'createdAt',
+					direction: Direction.DESC,
+					search: {
+						locationList: [property?.propertyLocation],
+					},
+				},
+			});
 			await sweetTopSmallSuccessAlert('success', 800);
 		} catch (err: any) {
-			console.log(err);
-			sweetMixinErrorAlert(err.message);
+			console.log('ERROR, likePropertyHandler:', err.message);
+			sweetMixinErrorAlert(err.message).then();
 		}
 	};
 
