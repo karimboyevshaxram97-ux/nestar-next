@@ -228,7 +228,7 @@ PropertyList.defaultProps = {
 			pricesRange: {
 				start: 0,
 				end: 2000000,
-			},
+			}, 
 		},
 	},
 };

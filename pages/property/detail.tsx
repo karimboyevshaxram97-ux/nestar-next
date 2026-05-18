@@ -11,7 +11,7 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import WestIcon from '@mui/icons-material/West';
 import EastIcon from '@mui/icons-material/East';
-import { useReactiveVar } from '@apollo/client';
+import { useMutation, useQuery, useReactiveVar } from '@apollo/client';
 import { useRouter } from 'next/router';
 import { Property } from '../../libs/types/property/property';
 import moment from 'moment';
@@ -25,6 +25,11 @@ import { Pagination as MuiPagination } from '@mui/material';
 import Link from 'next/link';
 import RemoveRedEyeIcon from '@mui/icons-material/RemoveRedEye';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import { GET_COMMENTS, GET_PROPERTIES, GET_PROPERTY } from '../../apollo/user/query';
+import { CREATE_COMMENT, LIKE_TARGET_PROPERTY } from '../../apollo/user/mutation';
+import { T } from '../../libs/types/common';
+import { Direction, Message } from '../../libs/enums/common.enum';
+import { sweetMixinErrorAlert, sweetTopSmallSuccessAlert } from '../../libs/sweetAlert';
 import 'swiper/css';
 import 'swiper/css/pagination';
 
@@ -43,7 +48,7 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
 	const [propertyId, setPropertyId] = useState<string | null>(null);
 	const [property, setProperty] = useState<Property | null>(null);
 	const [slideImage, setSlideImage] = useState<string>('');
-	const [destinationProperty, setDestinationProperty] = useState<Property[]>([]);
+	const [destinationProperties, setDestinationProperties] = useState<Property[]>([]);
 	const [commentInquiry, setCommentInquiry] = useState<CommentsInquiry>(initialComment);
 	const [propertyComments, setPropertyComments] = useState<Comment[]>([]);
 	const [commentTotal, setCommentTotal] = useState<number>(0);
@@ -54,6 +59,67 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
 	});
 
 	/** APOLLO REQUESTS **/
+	const [likeTargetProperty] = useMutation(LIKE_TARGET_PROPERTY);
+	const [createComment] = useMutation(CREATE_COMMENT);
+
+	const {
+		loading: getPropertyLoading,
+		data: getPropertyData,
+		error: getPropertyError,
+		refetch: getPropertyRefetch,
+	} = useQuery(GET_PROPERTY, {
+		fetchPolicy: 'cache-and-network',
+		variables: { input: propertyId },
+		skip: !propertyId,
+		notifyOnNetworkStatusChange: true,
+		onCompleted: (data: T) => {
+			if (data?.getProperty) setProperty(data?.getProperty);
+			if (data?.getProperty) setSlideImage(data?.getProperty?.propertyImages[0]);
+		},
+	});
+
+    	const {
+      loading: getPropertiesLoading,
+      data: getPropertiesData,
+      error: getPropertiesError,
+      refetch: getPropertiesRefetch,
+    } = useQuery(GET_PROPERTIES, {
+      fetchPolicy: 'cache-and-network',
+      variables: {
+        input: {
+          page: 1,
+          limit: 4,
+          sort: 'createdAt',
+          direction: Direction.DESC,
+          search: {
+            locationList: [property?.propertyLocation],
+          },
+        },
+      },
+      skip: !propertyId && !property,
+      notifyOnNetworkStatusChange: true,
+      onCompleted: (data: T) => {
+        if (data?.getProperties?.list)
+          setDestinationProperties(data?.getProperties?.list);
+      },
+    });
+
+
+	const {
+		loading: getCommentsLoading,
+		data: getCommentsData,
+		error: getCommentsError,
+		refetch: getCommentsRefetch,
+	} = useQuery(GET_COMMENTS, {
+		fetchPolicy: 'cache-and-network',
+		variables: { input: commentInquiry },
+		skip: !commentInquiry?.search?.commentRefId,
+		notifyOnNetworkStatusChange: true,
+		onCompleted: (data: T) => {
+			if (data?.getComments?.list) setPropertyComments(data?.getComments?.list);
+			setCommentTotal(data?.getComments?.metaCounter[0]?.total ?? 0);
+		},
+	});
 
 	/** LIFECYCLES **/
 	useEffect(() => {
@@ -72,9 +138,38 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
 		}
 	}, [router]);
 
-	useEffect(() => {}, [commentInquiry]);
+	useEffect(() => {
+		if (commentInquiry?.search?.commentRefId) {
+			getCommentsRefetch({ input: commentInquiry }).then();
+		}
+	}, [commentInquiry]);
 
 	/** HANDLERS **/
+	const likePropertyHandler = async (user: T, id: string) => {
+		try {
+			if (!id || !user?._id) throw new Error(Message.NOT_AUTHENTICATED);
+			await likeTargetProperty({ variables: { input: id } });
+			await getPropertyRefetch({ input: id });
+			await sweetTopSmallSuccessAlert('success', 800);
+		} catch (err: any) {
+			console.log(err);
+			sweetMixinErrorAlert(err.message);
+		}
+	};
+
+	const createCommentHandler = async () => {
+		try {
+			if (!user?._id) throw new Error(Message.NOT_AUTHENTICATED);
+			await createComment({ variables: { input: insertCommentData } });
+			setInsertCommentData({ ...insertCommentData, commentContent: '' });
+			await getCommentsRefetch({ input: commentInquiry });
+			await sweetTopSmallSuccessAlert('success', 800);
+		} catch (err: any) {
+			console.log(err);
+			sweetMixinErrorAlert(err.message);
+		}
+	};
+
 	const changeImageHandler = (image: string) => {
 		setSlideImage(image);
 	};
@@ -396,6 +491,7 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
 										<Button
 											className={'submit-review'}
 											disabled={insertCommentData.commentContent === '' || user?._id === ''}
+											onClick={createCommentHandler}
 										>
 											<Typography className={'title'}>Submit Review</Typography>
 											<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 17 17" fill="none">
@@ -487,7 +583,7 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
 								</Stack>
 							</Stack>
 						</Stack>
-						{destinationProperty.length !== 0 && (
+						{destinationProperties.length !== 0 && (
 							<Stack className={'similar-properties-config'}>
 								<Stack className={'title-pagination-box'}>
 									<Stack className={'title-box'}>
@@ -514,10 +610,10 @@ const PropertyDetail: NextPage = ({ initialComment, ...props }: any) => {
 											el: '.swiper-similar-pagination',
 										}}
 									>
-										{destinationProperty.map((property: Property) => {
+										{destinationProperties.map((property: Property) => {
 											return (
 												<SwiperSlide className={'similar-homes-slide'} key={property.propertyTitle}>
-													<PropertyBigCard property={property} key={property?._id} />
+													<PropertyBigCard property={property} likePropertyHandler={likePropertyHandler} key={property?._id} />
 												</SwiperSlide>
 											);
 										})}
