@@ -74,7 +74,7 @@ const MyFavorites: NextPage = () => {
 				<Stack className="favorites-list-box">
 					{myFavorites?.length ? (
 						myFavorites?.map((property: Property) => {
-							return <PropertyCard property={property} likePropertyHandler={likePropertyHandler} myFavorites={true} />;
+							return <PropertyCard property={property} likePropertyHandler={LikePropertyHandler} myFavorites={true} />;
 						})
 					) : (
 						<div className={'no-data'}>
