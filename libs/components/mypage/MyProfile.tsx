@@ -4,10 +4,12 @@ import useDeviceDetect from '../../hooks/useDeviceDetect';
 import { Button, Stack, Typography } from '@mui/material';
 import axios from 'axios';
 import { REACT_APP_API_URL } from '../../config';
-import { getJwtToken } from '../../auth';
-import { useReactiveVar } from '@apollo/client';
+import { getJwtToken, updateStorage, updateUserInfo } from '../../auth';
+import { useMutation, useReactiveVar } from '@apollo/client';
 import { userVar } from '../../../apollo/store';
 import { MemberUpdate } from '../../types/member/member.update';
+import { UPDATE_MEMBER } from '../../../apollo/user/mutation';
+import { sweetErrorHandling, sweetMixinSuccessAlert } from '../../sweetAlert';
 
 const MyProfile: NextPage = ({ initialValues, ...props }: any) => {
 	const device = useDeviceDetect();
@@ -16,6 +18,7 @@ const MyProfile: NextPage = ({ initialValues, ...props }: any) => {
 	const [updateData, setUpdateData] = useState<MemberUpdate>(initialValues);
 
 	/** APOLLO REQUESTS **/
+	const [updateMember] = useMutation(UPDATE_MEMBER);
 
 	/** LIFECYCLES **/
 	useEffect(() => {
@@ -74,7 +77,27 @@ const MyProfile: NextPage = ({ initialValues, ...props }: any) => {
 		}
 	};
 
-	const updatePropertyHandler = useCallback(async () => {}, [updateData]);
+    	const updatePropertyHandler = useCallback(async () => {
+      try {
+        if (!user._id) throw new Error('No user ID');
+        updateData._id = user._id;
+    
+        const result = await updateMember({
+          variables: {
+            input: updateData,
+          },
+        });
+    
+        const jwtToken = result.data.updateMember?.accessToken;
+        updateStorage({ jwtToken });
+        updateUserInfo(jwtToken);
+    
+        await sweetMixinSuccessAlert('information updated successfully.');
+      } catch (err: any) {
+        sweetErrorHandling(err).then();
+      }
+    }, [updateData]);
+    
 
 	const doDisabledCheck = () => {
 		if (

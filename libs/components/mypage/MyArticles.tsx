@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NextPage } from 'next';
 import useDeviceDetect from '../../hooks/useDeviceDetect';
 import { Pagination, Stack, Typography } from '@mui/material';
@@ -20,6 +20,11 @@ const MyArticles: NextPage = ({ initialInput, ...props }: T) => {
 	});
 	const [boardArticles, setBoardArticles] = useState<BoardArticle[]>([]);
 	const [totalCount, setTotalCount] = useState<number>(0);
+
+	/** LIFECYCLES **/
+	useEffect(() => {
+		if (user._id) setSearchCommunity((prev: T) => ({ ...prev, search: { memberId: user._id } }));
+	}, [user._id]);
 
 	/** APOLLO REQUESTS **/
     const [likeTargetBoardArticle] = useMutation(LIKE_TARGET_BOARD_ARTICLE);

@@ -127,7 +127,14 @@ export const updateStorage = ({ jwtToken }: { jwtToken: any }) => {
 export const updateUserInfo = (jwtToken: any) => {
 	if (!jwtToken) return false;
 
-	const claims = decodeJWT<CustomJwtPayload>(jwtToken);
+	let claims: CustomJwtPayload;
+	try {
+		claims = decodeJWT<CustomJwtPayload>(jwtToken);
+	} catch (err) {
+		console.warn('Invalid JWT token, logging out:', err);
+		logOut();
+		return false;
+	}
 	userVar({
 		_id: claims._id ?? '',
 		memberType: claims.memberType ?? '',
