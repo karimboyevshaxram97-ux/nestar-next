@@ -154,18 +154,30 @@ export const PropertyPanelList = (props: PropertyPanelListType) => {
 								return (
 									<TableRow hover key={property?._id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
 										<TableCell align="left">{property._id}</TableCell>
-										<TableCell align="left" className={'name'}>
-											<Stack direction={'row'}>
-												<Link href={`/property/detail?id=${property?._id}`}>
-													<div>
-														<Avatar alt="Remy Sharp" src={propertyImage} sx={{ ml: '2px', mr: '10px' }} />
-													</div>
-												</Link>
-												<Link href={`/property/detail?id=${property?._id}`}>
-													<div>{property.propertyTitle}</div>
-												</Link>
-											</Stack>
-										</TableCell>
+										<TableCell className="name">
+                                           {property.propertyStatus === PropertyStatus.ACTIVE ? (
+                                             <Stack direction="row">
+                                               <Link href={`/property/detail?id=${property?._id}`}>
+                                                 <Avatar
+                                                   alt="Remy Sharp"
+                                                   src={propertyImage}
+                                                   sx={{ ml: '2px', mr: '10px' }}
+                                                 />
+                                               </Link>
+                                               <div>{property.propertyTitle}</div>
+                                             </Stack>
+                                           ) : (
+                                             <Stack direction="row">
+                                               <Avatar
+                                                 alt="Remy Sharp"
+                                                 src={propertyImage}
+                                                 sx={{ ml: '2px', mr: '10px' }}
+                                               />
+                                               <div style={{ marginTop: '10px' }}>{property.propertyTitle}</div>
+                                             </Stack>
+                                           )}
+                                         </TableCell>
+
 										<TableCell align="center">{property.propertyPrice}</TableCell>
 										<TableCell align="center">{property.memberData?.memberNick}</TableCell>
 										<TableCell align="center">{property.propertyLocation}</TableCell>
